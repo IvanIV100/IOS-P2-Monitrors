@@ -6,10 +6,17 @@
  * @copyright Copyright (c) 2023
 */
 #include "proj2.h"
-
+//TODO
+/**
+ * Process creation
+ * Malloc for customer and Que nodes
+*/
 int main(int argc, char *argv[]){
 
     parseArguments(argc, &(*argv));
+
+    
+
     return 0;
 }
 

@@ -18,19 +18,23 @@ void parseArguments(int argc, char *argv[]);
 
 typedef struct postInfo {
     bool open;
-    int customers_inside;
-    int line_count;
+    int customersInside;
+    int lineCount;
     int customerID;
     int workerID;
-    int moleculeID;
+    struct Que* Q1;
+    struct Que* Q2;
+    struct Que* Q3;
+    
 } postInfo_t;
 
-// struct LinkedList {
-//   struct Node* head;
-//   int size;
-// };
+struct Customer {
+    int customerID;
+    int typeOfAction;
+    struct Customer* nextCustomer;
+}Customer_t;
 
-// struct Node {
-//   int data;
-//   struct Node* next;
-// };
+struct Que {
+    int lenght;
+    struct Customer* FirstCustomer;
+} Que_t;
