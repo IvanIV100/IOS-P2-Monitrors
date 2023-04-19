@@ -15,10 +15,39 @@ int main(int argc, char *argv[]){
 
     parseArguments(argc, &(*argv));
     
+    //set up clean up
     clearSharedMemory();
+    unlinkSemaphores();
+
+    //allocates, opens, and setups
     allocateInfoMemory();
+    openOutFile();
+    initializeSemaphores();
+    
     srand((unsigned)time(NULL));
+
+    //finished clean up
+    clearSharedMemory();
+    unlinkSemaphores();
     return 0;
+}
+void unlinkSemaphores(){
+    sem_unlink("xchoda00.writing");
+    sem_unlink("xchoda00.Que1");
+    sem_unlink("xchoda00.Que2");
+    sem_unlink("xchoda00.Que3");
+    return;
+
+}
+void initializeSemaphroes(){
+    writing = sem_open("xchoda00.writing", O_CREAT | O_EXCL, 0666, 1);
+    Que1 = sem_open("xchoda00.Que1", O_CREAT | O_EXCL, 0666, 1);
+    Que2 = sem_open("xchoda00.Que2", O_CREAT | O_EXCL, 0666, 1);
+    Que3 = sem_open("xchoda00.Que3", O_CREAT | O_EXCL, 0666, 1);
+    if(writing == SEM_FAILED || Que1 == SEM_FAILED || Que2 == SEM_FAILED || Que3 == SEM_FAILED){
+        exitError("Semaphore failed to open");
+    }
+    return;
 }
 
 void openOutFile(){
@@ -34,6 +63,7 @@ void clearSharedMemory() {
     shm_unlink("/xchoda00.postInfo");
 
     close(postInfoReturn);
+    return;
 }
 
 void allocateInfoMemory(){

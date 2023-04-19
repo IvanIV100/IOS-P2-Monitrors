@@ -17,6 +17,9 @@ void exitError(char *exitMsg);
 void parseArguments(int argc, char *argv[]);
 void allocateInfoMemory();
 void clearSharedMemory();
+void openOutFile();
+void initializeSemaphores();
+void unlinkSemaphores();
 
 typedef struct postInfo {
     bool open;
