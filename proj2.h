@@ -15,15 +15,19 @@
 
 void exitError(char *exitMsg);
 void parseArguments(int argc, char *argv[]);
-void allocateInfoMemory();
+void allocateMemory();
 void clearSharedMemory();
 void openOutFile();
 void initializeSemaphores();
 void unlinkSemaphores();
+void workerExecute();
+void customerExecute();
+void goToSleep();
+int randomValue();
 
-typedef struct postInfo {
+typedef struct postInfoShared {
     bool open;
-    int notEmpty;
+    bool isEmpty;
     int customersInside;
     int lineCount;
     int customerID;
@@ -31,7 +35,13 @@ typedef struct postInfo {
     // struct Que* Q1;
     // struct Que* Q2;
     // struct Que* Q3; 
-} postInfo_t;
+} postInfoShared_t;
+
+// typedef struct customer {
+//     int customerID;
+    
+// } customer_t;
+
 
 
 
@@ -41,7 +51,7 @@ int customerWait;
 int workerBreak;
 int postCloseIn;
 
-postInfo_t *postInfo;
+postInfoShared_t *postInfo;
 int postInfoReturn;
 
 sem_t *writing;

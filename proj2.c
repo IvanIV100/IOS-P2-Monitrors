@@ -13,33 +13,217 @@
 */
 int main(int argc, char *argv[]){
 
+    //parse args and make basic setup
     parseArguments(argc, &(*argv));
-    
+    srand((unsigned)time(NULL));
+
     //set up clean up
     clearSharedMemory();
     unlinkSemaphores();
 
     //allocates, opens, and setups
-    allocateInfoMemory();
+    allocateMemory();
     openOutFile();
     initializeSemaphores();
-    
-    srand((unsigned)time(NULL));
 
     //finished clean up
     clearSharedMemory();
     unlinkSemaphores();
+    fclose(output);
+    output = NULL;
     return 0;
 }
+
+int randomValue(int valueTop){
+    return (rand() % valueTop);
+}
+
+void goToSleep(int miliseconds){
+    if(miliseconds == 0)
+        return;
+    int waitFor = randomValue(miliseconds);
+    usleep(waitFor); 
+    return;
+}
+
+void customerExecute(){
+    for (int i = 0; i < customersToCreate; i++){
+        pid_t customerPid = fork();
+        if (customerPid < 0){
+            exitError("Customer PID creation failed");
+        }
+        
+        sem_wait(writing);
+        int currentID = ++postInfo->customerID;
+        ++postInfo->customersInside;
+        postInfo->isEmpty = false;
+        int taskType = randomValue(3) + 1;
+        fprintf(output, "%d: Z %d: started\n", ++postInfo->lineCount, currentID);
+        sem_post(writing);
+
+        goToSleep(customerWait);
+
+        sem_wait(writing);
+        if (postInfo->open == false){
+            fprintf(output, "%d: Z %d: going home\n", ++postInfo->lineCount, currentID);
+            sem_post(writing);
+            return;
+        } else{
+            fprintf(output, "%d: Z %d: entering office for a service %d\n", ++postInfo->lineCount, currentID, taskType);
+            sem_wait(writing);
+        }
+        switch (taskType) {
+            case 1:
+                sem_wait(Que1);
+                sem_wait(writing);
+                fprintf(output, "%d: Z %d: called by office worker\n", ++postInfo->lineCount, currentID);
+                sem_post(writing);
+                goToSleep(randomValue(10));
+                sem_wait(writing);
+                fprintf(output, "%d: Z %d: going home\n", ++postInfo->lineCount, currentID);
+                --postInfo->customersInside;
+                if(postInfo->customersInside == 0){
+                    postInfo->isEmpty = true;
+                }
+                sem_post(writing);
+                exit(0);
+                break;
+
+            case 2:
+                sem_wait(Que2);
+                sem_wait(writing);
+                fprintf(output, "%d: Z %d: called by office worker\n", ++postInfo->lineCount, currentID);
+                sem_post(writing);
+                goToSleep(randomValue(10));
+                sem_wait(writing);
+                fprintf(output, "%d: Z %d: going home\n", ++postInfo->lineCount, currentID);
+                --postInfo->customersInside;
+                if(postInfo->customersInside == 0){
+                    postInfo->isEmpty = true;
+                }
+                sem_post(writing);
+                exit(0);
+                break;
+
+            case 3:
+                sem_wait(Que3);
+                sem_wait(writing);
+                fprintf(output, "%d: Z %d: called by office worker\n", ++postInfo->lineCount, currentID);
+                sem_post(writing);
+                goToSleep(randomValue(10));
+                sem_wait(writing);
+                fprintf(output, "%d: Z %d: going home\n", ++postInfo->lineCount, currentID);
+                --postInfo->customersInside;
+                if(postInfo->customersInside == 0){
+                    postInfo->isEmpty = true;
+                }
+                sem_post(writing);
+                exit(0);
+                break;
+
+            default:
+                break;
+                exitError("Internal error while assigning service type");
+        }
+    }
+
+}
+
+void workerExecute(){
+    for (int i; i < workersToCreate; i++){
+        pid_t workerPid = fork();
+        if (workerPid < 0){
+            exitError("Customer PID creation failed");
+        }
+        sem_wait(writing);
+        int currentID = ++postInfo->workerID;
+        fprintf(output, "%d: U %d: started\n", ++postInfo->lineCount, currentID);
+        sem_post(writing);
+
+        bool work = true;
+        while(work){
+            int taskType = (rand() % 3) + 1;
+            switch (taskType) {
+            case 1:
+                sem_wait(writing);
+                fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, currentID, taskType);
+                sem_post(Que1);
+                sem_post(writing);
+                
+                goToSleep(randomValue(10));
+
+                sem_wait(writing);
+                fprintf(output, "%d: U %d: service finished\n", ++postInfo->lineCount, currentID);
+                sem_post(writing);
+                break;
+
+            case 2:
+                sem_wait(writing);
+                fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, currentID, taskType);
+                sem_post(Que2);
+                sem_post(writing);
+                
+                goToSleep(randomValue(10));
+
+                sem_wait(writing);
+                fprintf(output, "%d: U %d: service finished\n", ++postInfo->lineCount, currentID);
+                sem_post(writing);
+                break;
+
+            case 3:
+                sem_wait(writing);
+                fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, currentID, taskType);
+                sem_post(Que3);
+                sem_post(writing);
+                
+                goToSleep(randomValue(10));
+
+                sem_wait(writing);
+                fprintf(output, "%d: U %d: service finished\n", ++postInfo->lineCount, currentID);
+                sem_post(writing);
+                break;
+            default:
+                break;
+            }
+            bool snackTime = false;
+            sem_wait(writing);
+            if (postInfo->isEmpty == true){
+                snackTime = true;
+                if (postInfo->open == false){
+                    fprintf(output, "%d: U %d: going home\n", ++postInfo->lineCount, currentID);
+                    sem_post(writing);
+                    exit(0);
+                }
+            }
+            sem_post(writing);
+            if (snackTime){
+                goToSleep(randomValue(workerBreak));
+            }
+
+        }
+    
+    }
+}
+
 void unlinkSemaphores(){
+
+    sem_close(writing);
+    sem_close(Que1);
+    sem_close(Que2);
+    sem_close(Que3);
+    
     sem_unlink("xchoda00.writing");
     sem_unlink("xchoda00.Que1");
     sem_unlink("xchoda00.Que2");
     sem_unlink("xchoda00.Que3");
+    
     return;
-
 }
-void initializeSemaphroes(){
+void initializeSemaphores(){
+    sem_unlink("xchoda00.writing");
+    sem_unlink("xchoda00.Que1");
+    sem_unlink("xchoda00.Que2");
+    sem_unlink("xchoda00.Que3");
     writing = sem_open("xchoda00.writing", O_CREAT | O_EXCL, 0666, 1);
     Que1 = sem_open("xchoda00.Que1", O_CREAT | O_EXCL, 0666, 1);
     Que2 = sem_open("xchoda00.Que2", O_CREAT | O_EXCL, 0666, 1);
@@ -55,6 +239,7 @@ void openOutFile(){
     if (output == NULL || ferror(output)){
         exitError("Output file could not be open");
     }
+    setbuf(output, NULL);
     return;
 }
 
@@ -66,25 +251,25 @@ void clearSharedMemory() {
     return;
 }
 
-void allocateInfoMemory(){
+void allocateMemory(){
     
     postInfoReturn = shm_open("/xchoda00.postInfo", O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
     if(postInfoReturn == -1){
         exitError("Memory open failed");
     }
     
-    ftruncate(postInfoReturn, sizeof(postInfo_t));
+    ftruncate(postInfoReturn, sizeof(postInfoShared_t));
 
-    postInfo = mmap(NULL, sizeof(postInfo_t), PROT_READ | PROT_WRITE, MAP_SHARED, postInfoReturn, 0);
+    postInfo = mmap(NULL, sizeof(postInfoShared_t), PROT_READ | PROT_WRITE, MAP_SHARED, postInfoReturn, 0);
     if(postInfo == MAP_FAILED){
         exitError("Memory mapping failed");
     }
     postInfo->open = true;
-    postInfo->notEmpty = 0;
+    postInfo->isEmpty = true;
     postInfo->customersInside = 0;
-    postInfo->lineCount = 1;
-    postInfo->customerID = 1;
-    postInfo->workerID = 1;
+    postInfo->lineCount = 0;
+    postInfo->customerID = 0;
+    postInfo->workerID = 0;
     // postInfo->Q1 = Que1;
     // postInfo->Q2 = Que2;
     // postInfo->Q3 = Que3; 
