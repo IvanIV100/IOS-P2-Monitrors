@@ -15,26 +15,39 @@
 
 void exitError(char *exitMsg);
 void parseArguments(int argc, char *argv[]);
+void allocateInfoMemory();
+void clearSharedMemory();
 
 typedef struct postInfo {
     bool open;
+    int notEmpty;
     int customersInside;
     int lineCount;
     int customerID;
     int workerID;
-    struct Que* Q1;
-    struct Que* Q2;
-    struct Que* Q3;
-    
+    // struct Que* Q1;
+    // struct Que* Q2;
+    // struct Que* Q3; 
 } postInfo_t;
 
-struct Customer {
-    int customerID;
-    int typeOfAction;
-    struct Customer* nextCustomer;
-}Customer_t;
 
-struct Que {
-    int lenght;
-    struct Customer* FirstCustomer;
-} Que_t;
+
+int customersToCreate;
+int workersToCreate;
+int customerWait;
+int workerBreak;
+int postCloseIn;
+
+postInfo_t *postInfo;
+int postInfoReturn;
+
+sem_t *writing;
+sem_t *Que1;
+sem_t *Que2;
+sem_t *Que3;
+
+
+
+
+FILE *output;
+
