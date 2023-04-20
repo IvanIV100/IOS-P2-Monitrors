@@ -14,205 +14,313 @@
 int main(int argc, char *argv[]){
 
     //parse args and make basic setup
+    printf("Entering main \n");
     parseArguments(argc, &(*argv));
-    srand((unsigned)time(NULL));
-
+    
+    //person_t person;
     //set up clean up
+    printf("set up\n");
     clearSharedMemory();
-    unlinkSemaphores();
+    closeSemaphores();
+    printf("cleaned up \n");
 
     //allocates, opens, and setups
+    printf("mem alloc\n");
     allocateMemory();
+    printf("open file\n");
     openOutFile();
+    printf("open sem \n");
     initializeSemaphores();
 
+    for (int workerID = 1; workerID <= workersToCreate; workerID++){
+        printf("creating worker %d \n", workerID);
+        createWorker(workerID);
+    }
+
+    for (int customerID = 1; customerID <= customersToCreate; customerID++){
+        printf("creating customer %d \n", customerID);
+        createCustomer(customerID);
+
+    }
+    
+
+    int allBeings = customersToCreate + workersToCreate;
+
+    for (int currentOne = 1; currentOne <= allBeings; currentOne++){
+        printf("creating person %d \n", currentOne);
+        sem_post(spawn);
+    }
+    printf("go sleep \n");
+    goToSleep(postCloseIn);
+    printf("done sleep \n");
+    sem_wait(writing);
+    fprintf(output, "%d: closing\n", ++postInfo->lineCount);
+    sem_post(writing);
+    postInfo->open = false;
     //finished clean up
+    printf("wait to close \n");
+    while (wait(NULL) > 0) {
+        continue;
+    }
+    printf("all closed\n");
+    closeSemaphores();
     clearSharedMemory();
-    unlinkSemaphores();
     fclose(output);
     output = NULL;
-    return 0;
+    exit(0);
 }
 
 int randomValue(int valueTop){
+    srand((unsigned)time(NULL));
     return (rand() % valueTop);
 }
 
 void goToSleep(int miliseconds){
     if(miliseconds == 0)
         return;
-    int waitFor = randomValue(miliseconds);
+    int waitFor = randomValue(miliseconds*1000);
     usleep(waitFor); 
     return;
 }
 
-void customerExecute(){
-    for (int i = 0; i < customersToCreate; i++){
-        pid_t customerPid = fork();
-        if (customerPid < 0){
-            exitError("Customer PID creation failed");
-        }
+void createCustomer(int customerId){
+    pid_t customerPid = fork();
+    if (customerPid < 0){
+        exitError("Customer PID creation failed");
+    } else if (customerPid == 0){
+        printf("waiting for spawn C %d \n", customerId);
+        sem_wait(spawn);
+        printf("spawned C %d \n", customerId);
+        customerExecute(customerId);
+        printf("done C %d \n", customerId);
+        exit(0);
+    } else {
+        return;
+    }
+}
+
+void createWorker(int workerId){
+    pid_t workerPid = fork();
+    if (workerPid < 0){
+        exitError("Customer PID creation failed");
+    } else if (workerPid == 0) {
+        printf("waiting for spawn U %d \n", workerId);
+        sem_wait(spawn);
+        printf("spawned U %d \n", workerId);
+        workerExecute(workerId);
+        printf("done U %d \n", workerId);
+        exit(0);
+    } else {
+        return;
+    }
+}
+
+void customerExecute(int customerId){
+    printf("C ex \n");
+    int taskType = randomValue(3) + 1;
+    sem_wait(writing);
+    fprintf(output, "%d: Z %d: started\n", ++postInfo->lineCount, customerId);
+    sem_post(writing);
+
+    goToSleep(customerWait);
+    sem_wait(writing);
+    if (postInfo->open == false){
+        printf("op:false \n");
+        fprintf(output, "%d: Z %d: going home\n", ++postInfo->lineCount, customerId);
+        sem_post(writing);
+        exit(0);
+    } 
+    sem_post(writing);
+    printf("before entry\n");
+
+    if(postInfo->open == true){
+        printf("op:true \n");
         
         sem_wait(writing);
-        int currentID = ++postInfo->customerID;
         ++postInfo->customersInside;
         postInfo->isEmpty = false;
-        int taskType = randomValue(3) + 1;
-        fprintf(output, "%d: Z %d: started\n", ++postInfo->lineCount, currentID);
+        fprintf(output, "%d: Z %d: entering office for a service %d\n", ++postInfo->lineCount, customerId, taskType);
         sem_post(writing);
-
-        goToSleep(customerWait);
-
-        sem_wait(writing);
-        if (postInfo->open == false){
-            fprintf(output, "%d: Z %d: going home\n", ++postInfo->lineCount, currentID);
-            sem_post(writing);
-            return;
-        } else{
-            fprintf(output, "%d: Z %d: entering office for a service %d\n", ++postInfo->lineCount, currentID, taskType);
-            sem_wait(writing);
-        }
+    
         switch (taskType) {
             case 1:
+                sem_wait(writing);
+                postInfo->boolCount[taskType-1] = 1;
+                sem_post(writing);
                 sem_wait(Que1);
                 sem_wait(writing);
-                fprintf(output, "%d: Z %d: called by office worker\n", ++postInfo->lineCount, currentID);
+                fprintf(output, "%d: Z %d: called by office worker\n", ++postInfo->lineCount, customerId);
                 sem_post(writing);
+                
                 goToSleep(randomValue(10));
+
                 sem_wait(writing);
-                fprintf(output, "%d: Z %d: going home\n", ++postInfo->lineCount, currentID);
-                --postInfo->customersInside;
-                if(postInfo->customersInside == 0){
-                    postInfo->isEmpty = true;
-                }
+                fprintf(output, "%d: Z %d: going home\n", ++postInfo->lineCount, customerId);
                 sem_post(writing);
+                sem_wait(writing);
+                --postInfo->customersInside;
+                printf("current inside: %d \n",postInfo->customersInside);
+                sem_post(writing);
+                
                 exit(0);
                 break;
-
             case 2:
+                sem_wait(writing);
+                postInfo->boolCount[taskType-1] = 1;
+                sem_post(writing);
                 sem_wait(Que2);
                 sem_wait(writing);
-                fprintf(output, "%d: Z %d: called by office worker\n", ++postInfo->lineCount, currentID);
+                fprintf(output, "%d: Z %d: called by office worker\n", ++postInfo->lineCount, customerId);
                 sem_post(writing);
+
                 goToSleep(randomValue(10));
+
                 sem_wait(writing);
-                fprintf(output, "%d: Z %d: going home\n", ++postInfo->lineCount, currentID);
-                --postInfo->customersInside;
-                if(postInfo->customersInside == 0){
-                    postInfo->isEmpty = true;
-                }
+                printf("current inside: %d \n",postInfo->customersInside);
+                fprintf(output, "%d: Z %d: going home\n", ++postInfo->lineCount, customerId);
                 sem_post(writing);
+                sem_wait(writing);
+                --postInfo->customersInside;
+                printf("current inside: %d \n",postInfo->customersInside);
+                sem_post(writing);
+                
                 exit(0);
                 break;
 
             case 3:
+                sem_wait(writing);
+                postInfo->boolCount[taskType-1] = 1;
+                sem_post(writing);
                 sem_wait(Que3);
                 sem_wait(writing);
-                fprintf(output, "%d: Z %d: called by office worker\n", ++postInfo->lineCount, currentID);
+                fprintf(output, "%d: Z %d: called by office worker\n", ++postInfo->lineCount, customerId);
                 sem_post(writing);
+
                 goToSleep(randomValue(10));
+
                 sem_wait(writing);
-                fprintf(output, "%d: Z %d: going home\n", ++postInfo->lineCount, currentID);
-                --postInfo->customersInside;
-                if(postInfo->customersInside == 0){
-                    postInfo->isEmpty = true;
-                }
+                printf("current inside: %d \n",postInfo->customersInside);
+                fprintf(output, "%d: Z %d: going home\n", ++postInfo->lineCount, customerId);
                 sem_post(writing);
+                sem_wait(writing);
+                --postInfo->customersInside;
+                printf("current inside: %d \n",postInfo->customersInside);
+                sem_post(writing);
+                
                 exit(0);
                 break;
 
             default:
-                break;
+                
                 exitError("Internal error while assigning service type");
-        }
+                break;
+            }
+    } else {
+        printf("ret out\n");
+        return;
     }
-
+    printf("ret out\n");
+    return;
 }
 
-void workerExecute(){
-    for (int i; i < workersToCreate; i++){
-        pid_t workerPid = fork();
-        if (workerPid < 0){
-            exitError("Customer PID creation failed");
-        }
+void workerExecute(int workerId){
+        printf("W ex \n");
         sem_wait(writing);
-        int currentID = ++postInfo->workerID;
-        fprintf(output, "%d: U %d: started\n", ++postInfo->lineCount, currentID);
+        fprintf(output, "%d: U %d: started\n", ++postInfo->lineCount, workerId);
         sem_post(writing);
-
-        bool work = true;
-        while(work){
-            int taskType = (rand() % 3) + 1;
-            switch (taskType) {
-            case 1:
-                sem_wait(writing);
-                fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, currentID, taskType);
-                sem_post(Que1);
-                sem_post(writing);
-                
-                goToSleep(randomValue(10));
-
-                sem_wait(writing);
-                fprintf(output, "%d: U %d: service finished\n", ++postInfo->lineCount, currentID);
-                sem_post(writing);
-                break;
-
-            case 2:
-                sem_wait(writing);
-                fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, currentID, taskType);
-                sem_post(Que2);
-                sem_post(writing);
-                
-                goToSleep(randomValue(10));
-
-                sem_wait(writing);
-                fprintf(output, "%d: U %d: service finished\n", ++postInfo->lineCount, currentID);
-                sem_post(writing);
-                break;
-
-            case 3:
-                sem_wait(writing);
-                fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, currentID, taskType);
-                sem_post(Que3);
-                sem_post(writing);
-                
-                goToSleep(randomValue(10));
-
-                sem_wait(writing);
-                fprintf(output, "%d: U %d: service finished\n", ++postInfo->lineCount, currentID);
-                sem_post(writing);
-                break;
-            default:
-                break;
+            
+        while(1){
+            if (postInfo->customersInside <= 0){
+                postInfo->isEmpty = true;
             }
-            bool snackTime = false;
-            sem_wait(writing);
             if (postInfo->isEmpty == true){
-                snackTime = true;
-                if (postInfo->open == false){
-                    fprintf(output, "%d: U %d: going home\n", ++postInfo->lineCount, currentID);
+                //printf("empty \n");
+                if (postInfo->open == false && postInfo->isEmpty == true){
+                    printf("closed \n");
+                    sem_wait(writing);
+                    fprintf(output, "%d: U %d: going home\n", ++postInfo->lineCount, workerId);
                     sem_post(writing);
-                    exit(0);
-                }
-            }
-            sem_post(writing);
-            if (snackTime){
-                goToSleep(randomValue(workerBreak));
-            }
+                    return;
+                } else {
+                    sem_wait(writing);
+                    fprintf(output, "%d: U %d: taking break\n", ++postInfo->lineCount, workerId);
+                    sem_post(writing);
+                    goToSleep(randomValue(workerBreak));
+                    sem_wait(writing);
+                    fprintf(output, "%d: U %d: break finished\n", ++postInfo->lineCount, workerId);
+                    sem_post(writing);
 
-        }
-    
-    }
+                    continue;
+                }
+            } else {
+                int taskType = (rand() % 3);
+                while(postInfo->boolCount[taskType] == 0){
+                    taskType = (rand() % 3);
+                    if (postInfo->boolCount[0] == 0 && postInfo->boolCount[1] == 0 && postInfo->boolCount[2] == 0 ){
+                        continue;
+                    }
+                }
+                taskType++;
+                switch (taskType) {
+                    case 1:
+                        //printf("1 W\n");
+                        sem_wait(writing);
+                        fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, workerId, taskType);
+                        sem_post(writing);
+                        sem_post(Que1);
+                        goToSleep(randomValue(10));
+
+                        sem_wait(writing);
+                        fprintf(output, "%d: U %d: service finished\n", ++postInfo->lineCount, workerId);
+                        sem_post(writing);
+
+                        break;
+
+                    case 2:
+                        //printf("2 W\n");
+                        sem_wait(writing);
+                        fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, workerId, taskType);
+                        sem_post(writing);
+
+                        sem_post(Que2);
+                        goToSleep(randomValue(10));
+
+                        sem_wait(writing);
+                        fprintf(output, "%d: U %d: service finished\n", ++postInfo->lineCount, workerId);
+                        sem_post(writing);
+                        break;
+
+                    case 3:
+                        //printf("1 W\n");
+                        sem_wait(writing);
+                        fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, workerId, taskType);
+                        sem_post(writing);
+                        
+                        sem_post(Que3);
+                        goToSleep(randomValue(10));
+
+                        sem_wait(writing);
+                        fprintf(output, "%d: U %d: service finished\n", ++postInfo->lineCount, workerId);
+                        sem_post(writing);
+                        break;
+                    default:
+                        break;
+                    }
+                }
+            }   
+    return;
 }
 
-void unlinkSemaphores(){
+void closeSemaphores(){
 
     sem_close(writing);
+    sem_close(spawn);
     sem_close(Que1);
     sem_close(Que2);
     sem_close(Que3);
     
     sem_unlink("xchoda00.writing");
+    sem_unlink("xchoda00.spawn");
     sem_unlink("xchoda00.Que1");
     sem_unlink("xchoda00.Que2");
     sem_unlink("xchoda00.Que3");
@@ -221,14 +329,16 @@ void unlinkSemaphores(){
 }
 void initializeSemaphores(){
     sem_unlink("xchoda00.writing");
+    sem_unlink("xchoda00.spawn");
     sem_unlink("xchoda00.Que1");
     sem_unlink("xchoda00.Que2");
     sem_unlink("xchoda00.Que3");
     writing = sem_open("xchoda00.writing", O_CREAT | O_EXCL, 0666, 1);
-    Que1 = sem_open("xchoda00.Que1", O_CREAT | O_EXCL, 0666, 1);
-    Que2 = sem_open("xchoda00.Que2", O_CREAT | O_EXCL, 0666, 1);
-    Que3 = sem_open("xchoda00.Que3", O_CREAT | O_EXCL, 0666, 1);
-    if(writing == SEM_FAILED || Que1 == SEM_FAILED || Que2 == SEM_FAILED || Que3 == SEM_FAILED){
+    spawn = sem_open("xchoda00.spawn", O_CREAT | O_EXCL, 0666, 0);
+    Que1 = sem_open("xchoda00.Que1", O_CREAT | O_EXCL, 0666, 0);
+    Que2 = sem_open("xchoda00.Que2", O_CREAT | O_EXCL, 0666, 0);
+    Que3 = sem_open("xchoda00.Que3", O_CREAT | O_EXCL, 0666, 0);
+    if(writing == SEM_FAILED || spawn == SEM_FAILED ||Que1 == SEM_FAILED || Que2 == SEM_FAILED || Que3 == SEM_FAILED){
         exitError("Semaphore failed to open");
     }
     return;
@@ -268,8 +378,11 @@ void allocateMemory(){
     postInfo->isEmpty = true;
     postInfo->customersInside = 0;
     postInfo->lineCount = 0;
-    postInfo->customerID = 0;
-    postInfo->workerID = 0;
+    postInfo->boolCount[0] = 0;
+    postInfo->boolCount[1] = 0;
+    postInfo->boolCount[2] = 0;
+    // postInfo->customerID = 0;
+    // postInfo->workerID = 0;
     // postInfo->Q1 = Que1;
     // postInfo->Q2 = Que2;
     // postInfo->Q3 = Que3; 
@@ -300,8 +413,8 @@ void parseArguments(int argc, char *argv[]){
     if(atoi(argv[3]) < 0 || atoi(argv[4]) < 0 || atoi(argv[5]) < 0 ){
         exitError("Cannot pass negative numbers to Arg3 and Arg4 and Arg5");
     }
-    if(atoi(argv[3]) > 10000 || atoi(argv[4]) > 100 || atoi(argv[5]) > 1000){
-        exitError("Too big numbers for Arg3(max 10000) or Arg4(max 100) or Arg5(max 1000)");
+    if(atoi(argv[3]) > 10000 || atoi(argv[4]) > 100 || atoi(argv[5]) > 10000){
+        exitError("Too big numbers for Arg3(max 10000) or Arg4(max 100) or Arg5(max 10000)");
     }
 
     customersToCreate = atoi(argv[1]);

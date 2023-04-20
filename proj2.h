@@ -19,28 +19,33 @@ void allocateMemory();
 void clearSharedMemory();
 void openOutFile();
 void initializeSemaphores();
-void unlinkSemaphores();
-void workerExecute();
-void customerExecute();
+void closeSemaphores();
+void workerExecute(int workerID);
+void customerExecute(int customerID);
 void goToSleep();
 int randomValue();
+void createWorker(int workerID);
+void createCustomer(int customerID);
 
 typedef struct postInfoShared {
     bool open;
     bool isEmpty;
     int customersInside;
     int lineCount;
-    int customerID;
-    int workerID;
+    int boolCount[3];
+
+    //int customerID;
+    //wint workerID;
     // struct Que* Q1;
     // struct Que* Q2;
     // struct Que* Q3; 
 } postInfoShared_t;
 
-// typedef struct customer {
-//     int customerID;
+// typedef struct person {
+//     int currentID;
+//     int taskType;
     
-// } customer_t;
+// } person_t;
 
 
 
@@ -55,6 +60,7 @@ postInfoShared_t *postInfo;
 int postInfoReturn;
 
 sem_t *writing;
+sem_t *spawn;
 sem_t *Que1;
 sem_t *Que2;
 sem_t *Que3;
