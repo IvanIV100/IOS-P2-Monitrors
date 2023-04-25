@@ -47,6 +47,7 @@ int main(int argc, char *argv[]){
     }
     for (int customerID = 1; customerID <= customersToCreate; customerID++){
         pid_t customerPid = fork();
+        srand((unsigned)time(NULL));
         if (customerPid < 0){
             exitError("Customer PID creation failed");
         } else if (customerPid == 0){
@@ -95,7 +96,6 @@ void exitError(char *exitMsg){
 
 
 int randomValue(int valueTop){
-    srand((unsigned)time(NULL));
     return (rand() % valueTop);
 }
 
@@ -144,7 +144,16 @@ void workerExecute(int workerId){
                 switch (taskType){
                     case 1:
                         sem_wait(writing);
+                        if (postInfo->boolCount[taskType-1] == 0 ){
+                            sem_post(writing);
+                            continue;
+                        }
                         fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, workerId, taskType);
+                        --postInfo->customersInside;
+                        --postInfo->boolCount[taskType-1];
+                        if (postInfo->boolCount[0] == 0 && postInfo->boolCount[1] == 0 && postInfo->boolCount[2] == 0){
+                            postInfo->isEmpty = true;
+                        }
                         sem_post(Que1);
                         sem_post(writing);
 
@@ -156,8 +165,17 @@ void workerExecute(int workerId){
                         break;
                     case 2:
                         sem_wait(writing);
+                        if (postInfo->boolCount[taskType-1] == 0 ){
+                            sem_post(writing);
+                            continue;
+                        }
                         fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, workerId, taskType);
                         
+                        --postInfo->customersInside;
+                        --postInfo->boolCount[taskType-1];
+                        if (postInfo->boolCount[0] == 0 && postInfo->boolCount[1] == 0 && postInfo->boolCount[2] == 0){
+                            postInfo->isEmpty = true;
+                        }
                         sem_post(Que2);
                         
                         sem_post(writing);
@@ -171,10 +189,17 @@ void workerExecute(int workerId){
 
                     case 3:
                         sem_wait(writing);
+                        if (postInfo->boolCount[taskType-1] == 0 ){
+                            sem_post(writing);
+                            continue;
+                        }
                         fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, workerId, taskType);
-                        
+                        --postInfo->customersInside;
+                        --postInfo->boolCount[taskType-1];
+                        if (postInfo->boolCount[0] == 0 && postInfo->boolCount[1] == 0 && postInfo->boolCount[2] == 0){
+                            postInfo->isEmpty = true;
+                        }
                         sem_post(Que3);
-                        
                         sem_post(writing);
 
                         goToSleep(randomValue(10));
@@ -209,33 +234,18 @@ void customerExecute(int customerId){
         
         ++postInfo->boolCount[taskType-1];
         sem_wait(Que1);
-        --postInfo->customersInside;
-        --postInfo->boolCount[taskType-1];
-        if (postInfo->boolCount[0] == 0 && postInfo->boolCount[1] == 0 && postInfo->boolCount[2] == 0){
-            postInfo->isEmpty = true;
-        }
         customerTask(customerId);
         exit(0);
 
     case 2:
         ++postInfo->boolCount[taskType-1];
         sem_wait(Que2);
-        --postInfo->customersInside;
-        postInfo->boolCount[taskType-1]--;
-        if (postInfo->customersInside == 0){
-            postInfo->isEmpty = true;
-        }
         customerTask(customerId);
         exit(0);
 
     case 3:
         ++postInfo->boolCount[taskType-1];
         sem_wait(Que3);
-        --postInfo->customersInside;
-        postInfo->boolCount[taskType-1]--;
-        if (postInfo->customersInside == 0){
-            postInfo->isEmpty = true;
-        }
         customerTask(customerId);
         exit(0);
 
