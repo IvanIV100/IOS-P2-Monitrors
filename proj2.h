@@ -26,6 +26,7 @@ void goToSleep();
 int randomValue();
 void createWorker(int workerID);
 void createCustomer(int customerID);
+void customerTask(int customerID);
 
 typedef struct postInfoShared {
     bool open;
@@ -61,6 +62,7 @@ int postInfoReturn;
 
 sem_t *writing;
 sem_t *spawn;
+sem_t *spawner;
 sem_t *Que1;
 sem_t *Que2;
 sem_t *Que3;
