@@ -98,7 +98,7 @@ void exitError(char *exitMsg){
 int randomValue(int valueTop){
     return (rand() % valueTop);
 }
-
+// check if is empty or customersinside == 0
 void workerExecute(int workerId){
     while(1){
         sem_wait(writing);
@@ -117,103 +117,102 @@ void workerExecute(int workerId){
             continue;
         } else {
             int taskType = (rand() % 3);
-                if (postInfo->boolCount[0] == 0 && postInfo->boolCount[1] == 0 && postInfo->boolCount[2] == 0){
-                    printf("postInfoOpen: %d cumsin %d", postInfo->open, postInfo->customersInside);
-                    if (postInfo->open == false && postInfo->isEmpty == true) {
-                        fprintf(output, "%d: U %d: going home\n", ++postInfo->lineCount, workerId);
-                        sem_post(writing);
-                        exit(0);
-                    } else {
-                        fprintf(output, "%d: U %d: taking break\n", ++postInfo->lineCount, workerId);
-                        sem_post(writing);
-                        goToSleep(randomValue(workerBreak));
+            if (postInfo->boolCount[0] == 0 && postInfo->boolCount[1] == 0 && postInfo->boolCount[2] == 0){
+                printf("postInfoOpen: %d cumsin %d", postInfo->open, postInfo->customersInside);
+                if (postInfo->open == false && postInfo->isEmpty == true) {
+                    fprintf(output, "%d: U %d: going home\n", ++postInfo->lineCount, workerId);
+                    sem_post(writing);
+                    exit(0);
+                } else {
+                    fprintf(output, "%d: U %d: taking break\n", ++postInfo->lineCount, workerId);
+                    sem_post(writing);
+                    goToSleep(randomValue(workerBreak));
 
-                        sem_wait(writing);
-                        fprintf(output, "%d: U %d: break finished\n", ++postInfo->lineCount, workerId);
+                    sem_wait(writing);
+                    fprintf(output, "%d: U %d: break finished\n", ++postInfo->lineCount, workerId);
+                    sem_post(writing);
+                    continue;
+                }
+            }
+            while (postInfo->boolCount[taskType] == 0)
+            {
+                taskType = (rand() % 3);
+            }
+            sem_post(writing);
+
+            taskType++;
+            switch (taskType){
+                case 1:
+                    sem_wait(writing);
+                    if (postInfo->boolCount[taskType-1] == 0 ){
                         sem_post(writing);
                         continue;
                     }
-                }
-                while (postInfo->boolCount[taskType] == 0)
-                {
-                    taskType = (rand() % 3);
-                }
-                sem_post(writing);
+                    fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, workerId, taskType);
+                    --postInfo->customersInside;
+                    --postInfo->boolCount[taskType-1];
+                    if (postInfo->boolCount[0] == 0 && postInfo->boolCount[1] == 0 && postInfo->boolCount[2] == 0){
+                        postInfo->isEmpty = true;
+                    }
+                    sem_post(Que1);
+                    sem_post(writing);
 
-                taskType++;
-                switch (taskType){
-                    case 1:
-                        sem_wait(writing);
-                        if (postInfo->boolCount[taskType-1] == 0 ){
-                            sem_post(writing);
-                            continue;
-                        }
-                        fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, workerId, taskType);
-                        --postInfo->customersInside;
-                        --postInfo->boolCount[taskType-1];
-                        if (postInfo->boolCount[0] == 0 && postInfo->boolCount[1] == 0 && postInfo->boolCount[2] == 0){
-                            postInfo->isEmpty = true;
-                        }
-                        sem_post(Que1);
+                    goToSleep(randomValue(10));
+
+                    sem_wait(writing);
+                    fprintf(output, "%d: U %d: service finished\n", ++postInfo->lineCount, workerId);
+                    sem_post(writing);
+                    break;
+                case 2:
+                    sem_wait(writing);
+                    if (postInfo->boolCount[taskType-1] == 0 ){
                         sem_post(writing);
+                        continue;
+                    }
+                    fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, workerId, taskType);
+                    
+                    --postInfo->customersInside;
+                    --postInfo->boolCount[taskType-1];
+                    if (postInfo->boolCount[0] == 0 && postInfo->boolCount[1] == 0 && postInfo->boolCount[2] == 0){
+                        postInfo->isEmpty = true;
+                    }
+                    sem_post(Que2);
+                    
+                    sem_post(writing);
 
-                        goToSleep(randomValue(10));
+                    goToSleep(randomValue(10));
 
-                        sem_wait(writing);
-                        fprintf(output, "%d: U %d: service finished\n", ++postInfo->lineCount, workerId);
+                    sem_wait(writing);
+                    fprintf(output, "%d: U %d: service finished\n", ++postInfo->lineCount, workerId);
+                    sem_post(writing);
+                    break;
+
+                case 3:
+                    sem_wait(writing);
+                    if (postInfo->boolCount[taskType-1] == 0 ){
                         sem_post(writing);
-                        break;
-                    case 2:
-                        sem_wait(writing);
-                        if (postInfo->boolCount[taskType-1] == 0 ){
-                            sem_post(writing);
-                            continue;
-                        }
-                        fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, workerId, taskType);
-                        
-                        --postInfo->customersInside;
-                        --postInfo->boolCount[taskType-1];
-                        if (postInfo->boolCount[0] == 0 && postInfo->boolCount[1] == 0 && postInfo->boolCount[2] == 0){
-                            postInfo->isEmpty = true;
-                        }
-                        sem_post(Que2);
-                        
-                        sem_post(writing);
+                        continue;
+                    }
+                    fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, workerId, taskType);
+                    --postInfo->customersInside;
+                    --postInfo->boolCount[taskType-1];
+                    if (postInfo->boolCount[0] == 0 && postInfo->boolCount[1] == 0 && postInfo->boolCount[2] == 0){
+                        postInfo->isEmpty = true;
+                    }
+                    sem_post(Que3);
+                    sem_post(writing);
 
-                        goToSleep(randomValue(10));
+                    goToSleep(randomValue(10));
 
-                        sem_wait(writing);
-                        fprintf(output, "%d: U %d: service finished\n", ++postInfo->lineCount, workerId);
-                        sem_post(writing);
-                        break;
-
-                    case 3:
-                        sem_wait(writing);
-                        if (postInfo->boolCount[taskType-1] == 0 ){
-                            sem_post(writing);
-                            continue;
-                        }
-                        fprintf(output, "%d: U %d: serving a service of type %d\n", ++postInfo->lineCount, workerId, taskType);
-                        --postInfo->customersInside;
-                        --postInfo->boolCount[taskType-1];
-                        if (postInfo->boolCount[0] == 0 && postInfo->boolCount[1] == 0 && postInfo->boolCount[2] == 0){
-                            postInfo->isEmpty = true;
-                        }
-                        sem_post(Que3);
-                        sem_post(writing);
-
-                        goToSleep(randomValue(10));
-
-                        sem_wait(writing);
-                        fprintf(output, "%d: U %d: service finished\n", ++postInfo->lineCount, workerId);
-                        sem_post(writing);
-                        break;
-                    default:
-                        break;
-                }
+                    sem_wait(writing);
+                    fprintf(output, "%d: U %d: service finished\n", ++postInfo->lineCount, workerId);
+                    sem_post(writing);
+                    break;
+                default:
+                    break;
             }
         }
-        
+    }    
 }
 
 void customerExecute(int customerId){
@@ -231,7 +230,6 @@ void customerExecute(int customerId){
     switch (taskType)
     {
     case 1:
-        
         ++postInfo->boolCount[taskType-1];
         sem_wait(Que1);
         customerTask(customerId);
@@ -252,9 +250,6 @@ void customerExecute(int customerId){
     default:
         break;
     }
-
-
-
 }
 
 void customerTask(int customerId){
