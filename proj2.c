@@ -2,38 +2,38 @@
  * @file proj2.c
  * @name IOS-P2 process synchronization
  * @author Ivan Chodák xchoda00
+ * @brief Second project for IOS. Simulates a post with customers and workers. Uses semaphores and shared memory.
  * @date 19.4.2023
  * @copyright Copyright (c) 2023
 */
 #include "proj2.h"
-
+/**
+ * @brief Creates processes, calls fns and waits for children to die. When writing or reading from shared memory, uses semaphores to synchronize values.
+ * @param argc number of arguments
+ * @param argv array of arguments
+*/
 int main(int argc, char *argv[]){
-    //maybe dead
-    closeSemaphores();
-    clearSharedMemory();
+    cleanUp();
     parseArguments(argc, &(*argv));
-
     allocateMemory();
     openOutFile();
     initializeSemaphores();
 
+    //handles post closed at start
     int toSleep = 0;
     if (postCloseIn == 0){
         postInfo->open = false;
     } else {
         toSleep= (randomValue(postCloseIn*1000/2) + postCloseIn*1000/2) ;
     }
-    //  else if (postCloseIn == 1){
-    //     toSleep = 1000;
-    printf("toSleep: %d\n", toSleep );
-    
-    
 
+    //in case of failed fork it decreases the number of beings to be spawned
+    int failed = 0;
     for (int workerID = 1; workerID <= workersToCreate; workerID++){
         pid_t workerPid = fork();
         srand((unsigned)time(NULL));
         if (workerPid < 0){
-            exitError("Customer PID creation failed");
+            failed++;
         } else if (workerPid == 0) {
             sem_wait(writing);
             fprintf(output, "%d: U %d: started\n", ++postInfo->lineCount, workerID);
@@ -45,11 +45,12 @@ int main(int argc, char *argv[]){
             ;
         }
     }
+
     for (int customerID = 1; customerID <= customersToCreate; customerID++){
         pid_t customerPid = fork();
         srand((unsigned)time(NULL));
         if (customerPid < 0){
-            exitError("Customer PID creation failed");
+            failed++;
         } else if (customerPid == 0){
             sem_wait(writing);
             fprintf(output, "%d: Z %d: started\n", ++postInfo->lineCount, customerID);
@@ -62,43 +63,58 @@ int main(int argc, char *argv[]){
             ;
         }
     }
-    printf("to spawn \n");
-    int allBeings = customersToCreate + workersToCreate -2;
+
+    //waits for all beings to be spawned
+    int allBeings = customersToCreate + workersToCreate -2 - failed;
     for (int currentOne = 0; currentOne < allBeings; currentOne++){
         sem_wait(spawn);
     }
     
     usleep(toSleep);
-    printf("done sleep \n");
-
-    
     sem_wait(writing);
     fprintf(output, "%d: closing\n", ++postInfo->lineCount);
     postInfo->open = false;
     sem_post(writing);
     
-    
-
+    //waits for all children to terminate, cleans up and exits
     while (wait(NULL) > 0) {
         continue;
     }
-    printf("done wait \n");
-    closeSemaphores();
-    clearSharedMemory();
+    cleanUp();
     exit(0);
 }
 
+/**
+ * @brief Calls functions to clean up the program
+*/
+void cleanUp(){
+    closeSemaphores();
+    clearSharedMemory();
+    return;
+}
+
+/**
+ * @brief Prints error message and exits the program
+ * @param exitMsg message to be printed
+*/
 void exitError(char *exitMsg){
     fprintf(stderr, exitMsg , "\n");
     fprintf(stderr, "\n");
     exit(1);
 }
 
-
+/**
+ * @brief Returns random value from 0 to valueTop
+ * @param valueTop top value of the random value
+*/
 int randomValue(int valueTop){
     return (rand() % valueTop);
 }
-// check if is empty or customersinside == 0
+
+/**
+ * @brief Executes worker process. Handles all decrements of customers inside and boolCount. Takes a break, picks a Q and serves it, or goes home.
+ * @param workerId id of the worker to be executed
+*/
 void workerExecute(int workerId){
     while(1){
         sem_wait(writing);
@@ -106,26 +122,31 @@ void workerExecute(int workerId){
             fprintf(output, "%d: U %d: going home\n", ++postInfo->lineCount, workerId);
             sem_post(writing);
             exit(0);
+
         } else if (postInfo->isEmpty == true && postInfo->open == true) {
             fprintf(output, "%d: U %d: taking break\n", ++postInfo->lineCount, workerId);
             sem_post(writing);
+
             goToSleep(randomValue(workerBreak));
 
             sem_wait(writing);
             fprintf(output, "%d: U %d: break finished\n", ++postInfo->lineCount, workerId);
             sem_post(writing);
             continue;
+
         } else {
+            //double empty and break check to prevent deadlock or desync. 
             int taskType = (rand() % 3);
             if (postInfo->boolCount[0] == 0 && postInfo->boolCount[1] == 0 && postInfo->boolCount[2] == 0){
-                printf("postInfoOpen: %d cumsin %d", postInfo->open, postInfo->customersInside);
                 if (postInfo->open == false && postInfo->isEmpty == true) {
                     fprintf(output, "%d: U %d: going home\n", ++postInfo->lineCount, workerId);
                     sem_post(writing);
                     exit(0);
+
                 } else {
                     fprintf(output, "%d: U %d: taking break\n", ++postInfo->lineCount, workerId);
                     sem_post(writing);
+
                     goToSleep(randomValue(workerBreak));
 
                     sem_wait(writing);
@@ -134,12 +155,15 @@ void workerExecute(int workerId){
                     continue;
                 }
             }
+
             while (postInfo->boolCount[taskType] == 0)
             {
                 taskType = (rand() % 3);
             }
             sem_post(writing);
 
+            //worker task execute done in one func due to issues with desync
+            //Performs checks to either go home or take a break. Picks a Q, decreases counts, and serves it posting given Q sem. Waits and repeats.
             taskType++;
             switch (taskType){
                 case 1:
@@ -186,7 +210,6 @@ void workerExecute(int workerId){
                     fprintf(output, "%d: U %d: service finished\n", ++postInfo->lineCount, workerId);
                     sem_post(writing);
                     break;
-
                 case 3:
                     sem_wait(writing);
                     if (postInfo->boolCount[taskType-1] == 0 ){
@@ -215,6 +238,10 @@ void workerExecute(int workerId){
     }    
 }
 
+/**
+ * @brief Executes customer process. Handles all increments of customers inside and boolCount. Picks a Q and waits for it to be served, or goes home.
+ * @param customerId id of the customer to be executed
+*/
 void customerExecute(int customerId){
     sem_wait(writing);
     if (postInfo->open == false){
@@ -252,6 +279,10 @@ void customerExecute(int customerId){
     }
 }
 
+/**
+ * @brief Executes customer task. Waits for a random time and then goes home.
+ * @param customerId id of the customer to be executed
+*/
 void customerTask(int customerId){
     sem_wait(writing);
     fprintf(output, "%d: Z %d: called by office worker\n", ++postInfo->lineCount, customerId);
@@ -265,6 +296,9 @@ void customerTask(int customerId){
     return;
 }
 
+/**
+ * @brief Clears shared memory and closes it.
+*/
 void clearSharedMemory() {
     munmap(postInfo, sizeof(int));
     shm_unlink("/xchoda00.postInfo");
@@ -273,18 +307,20 @@ void clearSharedMemory() {
     return;
 }
 
+/**
+ * @brief Calls usleep for a random time (0 - miliseconds*1000) [*1000 to convert to microseconds]
+*/
 void goToSleep(int miliseconds){
-    if(miliseconds == 0){
-        return;
-    }
-        
+    if(miliseconds == 0){ return; }        
     int waitFor = randomValue(miliseconds*1000);
     usleep(waitFor); 
     return;
 }
 
+/**
+ * @brief Close all semaphores and unlink them.
+*/
 void closeSemaphores(){
-
     sem_close(writing);
     sem_close(spawn);
     sem_close(Que1);
@@ -300,6 +336,9 @@ void closeSemaphores(){
     return;
 }
 
+/**
+ * @brief First it cleans the potential semaphores, then it creates new ones. If creation fails, it exits with error.
+*/
 void initializeSemaphores(){
     closeSemaphores();
     writing = sem_open("xchoda00.writing", O_CREAT | O_EXCL, 0666, 1);
@@ -313,6 +352,9 @@ void initializeSemaphores(){
     return;
 }
 
+/**
+ * @brief Opens proj2.out output file. If it fails, it exits with error.
+*/
 void openOutFile(){
     output = fopen("proj2.out", "w+");
     if (output == NULL || ferror(output)){
@@ -322,15 +364,15 @@ void openOutFile(){
     return;
 }
 
+/**
+ * @brief Opens sharaed memory. Alocaates memory for postInfo. If it fails, it exits with error. Initializes postInfo values.
+*/
 void allocateMemory(){
-    
     postInfoReturn = shm_open("/xchoda00.postInfo", O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
     if(postInfoReturn == -1){
         exitError("Memory open failed");
     }
-    
     ftruncate(postInfoReturn, sizeof(postInfoShared_t));
-
     postInfo = mmap(NULL, sizeof(postInfoShared_t), PROT_READ | PROT_WRITE, MAP_SHARED, postInfoReturn, 0);
     if(postInfo == MAP_FAILED){
         exitError("Memory mapping failed");
@@ -346,6 +388,11 @@ void allocateMemory(){
     return;
 }
 
+/**
+ * @brief Parses arguments. Checks if they are in correct format and range. If not, it exits with error.
+ * @param argc number of arguments
+ * @param argv array of arguments
+*/
 void parseArguments(int argc, char *argv[]){
     if ( argc != 6){
         exitError("Invalid amount of arguments");
@@ -355,7 +402,6 @@ void parseArguments(int argc, char *argv[]){
         if(isdigit(*argv[i]) == 0) {
             exitError("Invalid format. Input numbers ");
         }
-        
     }
     //check if correct ranges
     if(atoi(argv[1]) < 1 || atoi(argv[2]) <1 || atoi(argv[3]) < 0 || atoi(argv[4]) < 0 || atoi(argv[5]) < 0 ){
