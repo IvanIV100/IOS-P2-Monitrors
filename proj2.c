@@ -108,6 +108,7 @@ void exitError(char *exitMsg){
  * @param valueTop top value of the random value
 */
 int randomValue(int valueTop){
+    if (valueTop == 0){ return 0;} 
     return (rand() % valueTop);
 }
 
@@ -384,7 +385,6 @@ void allocateMemory(){
     postInfo->boolCount[0] = 0;
     postInfo->boolCount[1] = 0;
     postInfo->boolCount[2] = 0;
-
     return;
 }
 
