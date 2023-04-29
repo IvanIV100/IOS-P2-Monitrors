@@ -14,6 +14,7 @@
 #include <string.h>
 #include <ctype.h>
 
+
 //Function prototypes
 void exitError(char *exitMsg);
 void parseArguments(int argc, char *argv[]);
@@ -57,7 +58,6 @@ int postCloseIn;
 //Semaphores
 sem_t *writing;
 sem_t *spawn;
-sem_t *spawner;
 sem_t *Que1;
 sem_t *Que2;
 sem_t *Que3;

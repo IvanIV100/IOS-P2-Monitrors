@@ -20,12 +20,7 @@ int main(int argc, char *argv[]){
     initializeSemaphores();
 
     //handles post closed at start
-    int toSleep = 0;
-    if (postCloseIn == 0){
-        postInfo->open = false;
-    } else {
-        toSleep= (randomValue(postCloseIn*1000/2) + postCloseIn*1000/2) ;
-    }
+    
 
     //in case of failed fork it decreases the number of beings to be spawned
     int failed = 0;
@@ -70,11 +65,22 @@ int main(int argc, char *argv[]){
         sem_wait(spawn);
     }
     
-    usleep(toSleep);
-    sem_wait(writing);
-    fprintf(output, "%d: closing\n", ++postInfo->lineCount);
-    postInfo->open = false;
-    sem_post(writing);
+int toSleep = 0;
+if (postCloseIn == 0){
+        sem_wait(writing);
+        fprintf(output, "%d: closing\n", ++postInfo->lineCount);
+        postInfo->open = false;
+        sem_post(writing);
+    } else {
+        toSleep = (randomValue(postCloseIn*1000/2) + postCloseIn*1000/2) ;
+        usleep(toSleep);
+        sem_wait(writing);
+        fprintf(output, "%d: closing\n", ++postInfo->lineCount);
+        postInfo->open = false;
+        sem_post(writing);
+    }    
+
+    
     
     //waits for all children to terminate, cleans up and exits
     while (wait(NULL) > 0) {
